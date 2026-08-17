@@ -1,33 +1,42 @@
 ﻿using IcarusDroneServiceWPF;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
+
 
 namespace IcarusDroneServiceApp
 {
     public partial class MainWindow : Window
     {
-        // 6.2 Global List<T> of type Drone called FinishedList.
+        // 6.2 Global List<T> of type Drone called FinishedList
         private readonly List<Drone> FinishedList = new List<Drone>();
 
-        // 6.3 Global Queue<T> of type Drone called RegularService.
+        // 6.3 Global Queue<T> of type Drone called RegularService
         private readonly Queue<Drone> RegularService = new Queue<Drone>();
 
-        // 6.4 Global Queue<T> of type Drone called ExpressService.
+        // 6.4 Global Queue<T> of type Drone called ExpressService
         private readonly Queue<Drone> ExpressService = new Queue<Drone>();
 
         public MainWindow()
         {
             InitializeComponent();
+
+            // Applies the Service Cost validation to pasted text as well as typed text
+            DataObject.AddPastingHandler(
+                txtServiceCost,
+                ServiceCost_Pasting
+            );
         }
 
-        // 6.5 Adds a new service item to the correct Queue based on selected priority.
-        // 6.6 Adds 15% to the service cost before adding an Express service item.
-        // 6.7 Calls GetServicePriority before adding the item to a Queue.
-        // 6.11 Calls IncrementServiceTag before completing the add process.
-        // 6.17 Calls ClearTextboxes after a service item has been added.
+        // 6.5 Adds a new service item to the correct Queue based on selected priority
+        // 6.6 Adds 15% to the service cost before adding an Express service item
+        // 6.7 Calls GetServicePriority before adding the item to a Queue
+        // 6.11 Calls IncrementServiceTag before completing the add process
+        // 6.17 Calls ClearTextboxes after a service item has been added
         private void AddNewItem(object sender, RoutedEventArgs e)
         {
             if (string.IsNullOrWhiteSpace(txtClientName.Text))
@@ -52,12 +61,14 @@ namespace IcarusDroneServiceApp
             {
                 return;
             }
-
-            if (!int.TryParse(txtServiceTag.Text, out int serviceTag))
+            // changed the Service Tag to be a numeric control value
+            if (!numServiceTag.Value.HasValue)
             {
-                txtStatus.Text = "Service tag is invalid.";
+                txtStatus.Text = "Service tag is required.";
                 return;
             }
+
+            int serviceTag = numServiceTag.Value.Value;
 
             string priority = GetServicePriority();
 
@@ -92,7 +103,7 @@ namespace IcarusDroneServiceApp
             ClearTextboxes();
         }
 
-        // 6.7 Returns the value of the selected priority radio button.
+        // 6.7 Returns the value of the selected priority radio button
         private string GetServicePriority()
         {
             if (radExpress.IsChecked == true)
@@ -103,44 +114,99 @@ namespace IcarusDroneServiceApp
             return "Regular";
         }
 
-        // 6.10 Checks that the Service Cost textbox contains a valid double value.
+        // 6.10 Performs the final validation of the Service Cost
+        // The value must be a valid non-negative double with no more than
+        // two digits after the decimal point
         private bool ValidateServiceCost(out double serviceCost)
         {
             serviceCost = 0;
 
-            if (string.IsNullOrWhiteSpace(txtServiceCost.Text))
+            string serviceCostText = txtServiceCost.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(serviceCostText))
             {
                 txtStatus.Text = "Service cost is required.";
                 return false;
             }
 
-            if (!double.TryParse(txtServiceCost.Text, out serviceCost))
+            // Final pattern requires at least one digit.
+            // It permits a whole number or one/two decimal places.
+            // "^" Start Anchor which forces the match to start the very beginning of the text, so that way no text can be before the number.
+            // "/d+" Digits, makes it require one or more digits (0-9) for the whole number part (etc 5, 100, 0)
+            // "(....)" The "?" at the end makes everything inside the parentheses optional, so that way it can allow whole numbers without decimals (etc 50)
+            // "\." matches the actual decimal point, and the backslash is required because a raw dot would mean "any character" in regex
+            // "\d{1,2} is the decimal places, which restricts the number after the decimal point to exactly one or two digits (etc .5 or 50)
+            // "$" End Anchor which forces the match to end at the very end of the text, so that way no text can be after the number.
+
+            // passes: 99, 99.9, 99.90, 125.50, 0.25
+            // fails: 99.999, 99. 12..50, hello, $50
+
+            Regex completeCostPattern =
+                new Regex(@"^\d+(\.\d{1,2})?$");
+
+            if (!completeCostPattern.IsMatch(serviceCostText))
             {
-                txtStatus.Text = "Service cost must be a number.";
+                txtStatus.Text =
+                    "Service cost must be a number with no more than two decimal places.";
+
+                txtServiceCost.Focus();
+                txtServiceCost.SelectAll();
+
+                return false;
+            }
+
+            bool validDouble = double.TryParse(
+                serviceCostText,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out serviceCost
+            );
+
+            if (!validDouble)
+            {
+                txtStatus.Text = "Service cost must be a valid number.";
+
+                txtServiceCost.Focus();
+                txtServiceCost.SelectAll();
+
                 return false;
             }
 
             if (serviceCost < 0)
             {
                 txtStatus.Text = "Service cost cannot be negative.";
+
+                txtServiceCost.Focus();
+                txtServiceCost.SelectAll();
+
                 return false;
             }
 
-            serviceCost = double.Parse(serviceCost.ToString("0.00"));
+            // Ensures values such as 99.9 are displayed as 99.90
+            txtServiceCost.Text =
+                serviceCost.ToString("0.00", CultureInfo.InvariantCulture);
+
             return true;
         }
 
-        // 6.11 Increments the service tag by 10 after a new service item is added.
+        // 6.10 Custom method used while the user is editing Service Cost
+        // It allows an empty textbox while editing, digits, one decimal point
+        // and a maximum of two digits after the decimal point
+        private bool IsValidServiceCostInput(string text)
+        {
+            Regex inputPattern =
+                new Regex(@"^\d*(\.\d{0,2})?$");
+
+            return inputPattern.IsMatch(text);
+        }
+
+        // 6.11 Increments the numeric Service Tag control by 10
+        // The value cannot exceed the maximum of 900
         private void IncrementServiceTag()
         {
-            int currentTag = int.Parse(txtServiceTag.Text);
+            int currentTag = numServiceTag.Value ?? 100;
 
-            if (currentTag < 900)
-            {
-                currentTag += 10;
-            }
-
-            txtServiceTag.Text = currentTag.ToString();
+            numServiceTag.Value = Math.Min(currentTag + 10, 900);
         }
 
         // 6.8 Displays all elements in the RegularService Queue using a ListView.
@@ -247,21 +313,86 @@ namespace IcarusDroneServiceApp
         }
 
         // 6.10 Prevents invalid characters and limits the Service Cost textbox to two decimal places.
-        private void ServiceCost_PreviewTextInput(object sender, TextCompositionEventArgs e)
+        // 6.10 Checks each keyboard character before it appears
+        // in the Service Cost textbox.
+        private void ServiceCost_PreviewTextInput(
+            object sender,
+            TextCompositionEventArgs e
+        )
         {
-            string newText = txtServiceCost.Text.Insert(txtServiceCost.SelectionStart, e.Text);
+            string currentText = txtServiceCost.Text;
 
-            Regex regex = new Regex(@"^\d*\.?\d{0,2}$");
+            int selectionStart = txtServiceCost.SelectionStart;
+            int selectionLength = txtServiceCost.SelectionLength;
 
-            e.Handled = !regex.IsMatch(newText);
+            // Remove highlighted text first, then insert the new character.
+            string proposedText = currentText
+                .Remove(selectionStart, selectionLength)
+                .Insert(selectionStart, e.Text);
+
+            // Handled = true blocks the character.
+            e.Handled = !IsValidServiceCostInput(proposedText);
         }
 
-        // 6.10 Formats the Service Cost textbox to two decimal places when the user leaves the textbox.
-        private void ServiceCost_LostFocus(object sender, RoutedEventArgs e)
+        // 6.10 Prevents invalid text from being pasted into Service Cost.
+        private void ServiceCost_Pasting(
+            object sender,
+            DataObjectPastingEventArgs e
+        )
         {
-            if (double.TryParse(txtServiceCost.Text, out double serviceCost))
+            if (sender is not TextBox textBox)
             {
-                txtServiceCost.Text = serviceCost.ToString("0.00");
+                e.CancelCommand();
+                return;
+            }
+
+            if (!e.DataObject.GetDataPresent(DataFormats.Text))
+            {
+                e.CancelCommand();
+                return;
+            }
+
+            string pastedText =
+                e.DataObject.GetData(DataFormats.Text) as string ?? "";
+
+            string proposedText = textBox.Text
+                .Remove(textBox.SelectionStart, textBox.SelectionLength)
+                .Insert(textBox.SelectionStart, pastedText);
+
+            if (!IsValidServiceCostInput(proposedText))
+            {
+                e.CancelCommand();
+
+                txtStatus.Text =
+                    "Service cost can only contain a number with up to two decimal places.";
+            }
+        }
+
+
+        // 6.10 Formats valid Service Cost input to exactly two decimal places.
+        private void ServiceCost_LostFocus(
+            object sender,
+            RoutedEventArgs e
+        )
+        {
+            string serviceCostText = txtServiceCost.Text.Trim();
+
+            if (string.IsNullOrWhiteSpace(serviceCostText))
+            {
+                return;
+            }
+
+            bool validCost = double.TryParse(
+                serviceCostText,
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out double serviceCost
+            );
+
+            if (validCost && serviceCost >= 0)
+            {
+                txtServiceCost.Text =
+                    serviceCost.ToString("0.00", CultureInfo.InvariantCulture);
             }
         }
 

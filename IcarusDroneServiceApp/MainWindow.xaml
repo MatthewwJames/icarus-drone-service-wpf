@@ -4,6 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:IcarusDroneServiceWPF"
+        xmlns:xctk="http://schemas.xceed.com/wpf/xaml/toolkit"
         mc:Ignorable="d"
         Title="Icarus Drone Service App"
         Height="720"
@@ -69,13 +70,15 @@
                                 LostFocus="ServiceCost_LostFocus" />
 
                     <TextBlock Text="Service Tag" Grid.Row="2" Grid.Column="0" Margin="0,0,10,4" FontWeight="SemiBold" />
-                    <TextBox x:Name="txtServiceTag"
-                             Grid.Row="3"
-                             Grid.Column="0"
-                             Margin="0,0,10,0"
-                             Height="28"
-                             Text="100"
-                             IsReadOnly="True" />
+                    <xctk:IntegerUpDown x:Name="numServiceTag"
+                        Grid.Row="3"
+                        Grid.Column="0"
+                        Margin="0,0,10,0"
+                        Height="28"
+                        Value="100"
+                        Minimum="100"
+                        Maximum="900"
+                        Increment="10" />
 
                     <TextBlock Text="Priority" Grid.Row="2" Grid.Column="1" Margin="0,0,10,4" FontWeight="SemiBold" />
                     <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,0,10,0">
